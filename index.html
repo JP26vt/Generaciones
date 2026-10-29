@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estilos de vida entre generaciones</title>
+<style>
+  :root {
+    --bosque: #1f4d36;
+    --hoja: #4f8a4b;
+    --musgo: #e4eed9;
+    --tierra: #7a5a3a;
+    --papel: #f6f8f1;
+    --texto: #22302a;
+    --aviso: #b3401f;
+    --borde: #c3d4b4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Georgia, "Times New Roman", serif;
+    background: var(--papel);
+    color: var(--texto);
+    line-height: 1.55;
+  }
+  header {
+    background: var(--bosque);
+    color: #fff;
+    padding: 2.5rem 1.25rem 2rem;
+    text-align: center;
+    border-bottom: 6px solid var(--hoja);
+  }
+  header h1 { margin: 0 0 .75rem; font-size: clamp(1.7rem, 5vw, 2.8rem); letter-spacing: .01em; }
+  header p { margin: 0 auto; max-width: 60ch; font-size: 1.05rem; color: #dcebd2; }
+  main { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  .columnas { display: grid; grid-template-columns: 1fr; gap: 1.25rem; }
+  @media (min-width: 900px) { .columnas { grid-template-columns: repeat(3, 1fr); } }
+  section.persona {
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-top: 5px solid var(--hoja);
+    border-radius: 8px;
+    padding: 1.1rem;
+  }
+  section.persona:nth-child(2) { border-top-color: var(--tierra); }
+  section.persona:nth-child(3) { border-top-color: var(--bosque); }
+  section.persona h2 { margin: 0 0 .9rem; color: var(--bosque); font-size: 1.4rem; }
+  label { display: block; font-weight: bold; font-size: .93rem; margin: .9rem 0 .3rem; }
+  input[type="number"], textarea {
+    width: 100%;
+    font: inherit;
+    font-size: .95rem;
+    padding: .55rem .65rem;
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    background: var(--papel);
+    color: var(--texto);
+  }
+  textarea { min-height: 4.5rem; resize: vertical; }
+  input:focus, textarea:focus, button:focus-visible {
+    outline: 3px solid var(--hoja);
+    outline-offset: 1px;
+  }
+  .vacio { border-color: var(--aviso) !important; background: #fdf0ec !important; }
+  .acciones { text-align: center; margin-top: 2rem; }
+  button#comparar {
+    font: inherit;
+    font-weight: bold;
+    font-size: 1.1rem;
+    background: var(--bosque);
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    padding: .85rem 2.2rem;
+    cursor: pointer;
+  }
+  button#comparar:hover:not(:disabled) { background: var(--hoja); }
+  button#comparar:disabled { background: #8a9a8f; cursor: not-allowed; }
+  #aviso, #estado { margin: 1rem auto 0; max-width: 700px; font-weight: bold; }
+  #aviso { color: var(--aviso); }
+  #estado { color: var(--bosque); }
+  #resultado {
+    display: none;
+    margin: 1.25rem auto 0;
+    max-width: 800px;
+    text-align: left;
+    background: var(--musgo);
+    border: 2px solid var(--hoja);
+    border-radius: 8px;
+    padding: 1.1rem 1.25rem;
+    white-space: pre-line;
+  }
+  #resultado.error { background: #fdf0ec; border-color: var(--aviso); color: var(--aviso); font-weight: bold; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Estilos de vida entre generaciones</h1>
+  <p>Se entrevistó a tres generaciones sobre sus hábitos de consumo para compararlos: cómo comían, se vestían, se transportaban y cuidaban el agua y la basura.</p>
+</header>
+
+<main>
+  <div class="columnas" id="columnas"></div>
+
+  <div class="acciones">
+    <button id="comparar" type="button">Comparar respuestas</button>
+    <div id="aviso" role="alert"></div>
+    <div id="estado" role="status"></div>
+    <div id="resultado" aria-live="polite"></div>
+  </div>
+</main>
+
+<script>
+  // Pega aquí la URL de tu webhook de Make:
+  const WEBHOOK_URL = "https://hook.us2.make.com/5l5iw3cmjq745jf65zbhy7etixy8u6l7";
+
+  const PREGUNTAS = [
+    "¿Cómo se conseguía la comida en casa: mercado, tienda, súper o cultivo propio?",
+    "¿Qué se hacía con la ropa o los zapatos viejos o rotos?",
+    "¿Qué aparatos electrónicos tenías y cada cuánto los cambiabas?",
+    "¿Cómo te transportabas a la escuela o al trabajo?",
+    "¿Qué se hacía con la basura? ¿Se separaba o se reutilizaba algo?",
+    "¿Usabas bolsas, botellas o envases desechables?",
+    "¿Cómo se usaba y se cuidaba el agua en casa?",
+    "¿Qué consideras necesario para vivir bien?"
+  ];
+
+  const PERSONAS = [
+    { clave: "abuelo", titulo: "Abuelo/a" },
+    { clave: "padre", titulo: "Padre/Madre" },
+    { clave: "amigo", titulo: "Amigo/a" }
+  ];
+
+  // Construir las tres secciones
+  const contenedor = document.getElementById("columnas");
+  PERSONAS.forEach(function (p) {
+    let html = '<section class="persona"><h2>' + p.titulo + '</h2>';
+    html += '<label for="' + p.clave + '_edad">Edad</label>';
+    html += '<input type="number" id="' + p.clave + '_edad" min="1" max="120">';
+    PREGUNTAS.forEach(function (q, i) {
+      html += '<label for="' + p.clave + '_' + (i + 1) + '">' + (i + 1) + '. ' + q + '</label>';
+      html += '<textarea id="' + p.clave + '_' + (i + 1) + '"></textarea>';
+    });
+    html += '</section>';
+    contenedor.insertAdjacentHTML("beforeend", html);
+  });
+
+  const boton = document.getElementById("comparar");
+  const aviso = document.getElementById("aviso");
+  const estado = document.getElementById("estado");
+  const resultado = document.getElementById("resultado");
+
+  // Verifica que todos los campos estén llenos
+  function validar() {
+    let faltan = 0;
+    document.querySelectorAll("#columnas input, #columnas textarea").forEach(function (el) {
+      if (el.value.trim() === "") {
+        el.classList.add("vacio");
+        faltan++;
+      } else {
+        el.classList.remove("vacio");
+      }
+    });
+    return faltan === 0;
+  }
+
+  // Arma el texto de una persona con el formato pedido
+  function armarTexto(clave) {
+    let texto = "Edad: " + document.getElementById(clave + "_edad").value.trim();
+    PREGUNTAS.forEach(function (q, i) {
+      const r = document.getElementById(clave + "_" + (i + 1)).value.trim();
+      texto += "\n" + (i + 1) + ". " + q + ": " + r;
+    });
+    return texto;
+  }
+
+  boton.addEventListener("click", async function () {
+    aviso.textContent = "";
+    resultado.style.display = "none";
+    resultado.classList.remove("error");
+
+    if (!validar()) {
+      aviso.textContent = "Faltan campos por llenar. Completa la edad y las 8 respuestas de las tres personas.";
+      return;
+    }
+
+    const datos = new URLSearchParams();
+    datos.append("abuelo", armarTexto("abuelo"));
+    datos.append("padre", armarTexto("padre"));
+    datos.append("amigo", armarTexto("amigo"));
+
+    boton.disabled = true;
+    estado.textContent = "Analizando respuestas, esto puede tardar unos segundos...";
+
+    try {
+      const respuesta = await fetch(WEBHOOK_URL, { method: "POST", body: datos });
+      if (!respuesta.ok) throw new Error("Error " + respuesta.status);
+      const texto = await respuesta.text();
+      resultado.textContent = texto;
+      resultado.style.display = "block";
+    } catch (e) {
+      resultado.textContent = "No se pudo obtener el análisis, intenta de nuevo.";
+      resultado.classList.add("error");
+      resultado.style.display = "block";
+    } finally {
+      estado.textContent = "";
+      boton.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
